@@ -27,15 +27,20 @@ def timestr(t):
 def elog(msg):
     sys.stderr.write("%s %s\n" % (strnow(), msg))
 
-class DebugFuture(asyncio.Future):
+class GraceFuture(asyncio.Future):
 
     def __init__(self):
         asyncio.Future.__init__(self)
 
     def cancel(self):
-        elog("DebugFuture.cancel")
+        elog("GraceFuture.cancel")
         elog("Boom %d" % (1/0))
         asyncio.Future.cancel(self)
+
+    def set_result_default(self, result):
+        if not self.done():
+            self.set_result(result)
+        return self.result()
         
 class Client:
 
@@ -46,12 +51,13 @@ class Client:
         self.time = time.time()
         self.alive = True
         # self.future = asyncio.Future()
-        self.future = DebugFuture()
+        self.future = GraceFuture()
         elog("Client.__init__: future=%s" % self.future_state())
 
     def bump(self):
         self.phase += 1
         self.time = time.time()
+
 
 #    async def produce(self):
 #        # self.future = asyncio.Future()
@@ -68,7 +74,7 @@ class Client:
         elog("Client.produce: %s awaited" % str(self.ws.remote_address))
         result = self.future.result()
         # self.future = asyncio.Future()
-        self.future = DebugFuture()
+        self.future = GraceFuture()
         self.future.add_done_callback(self.future_dbg)
         elog("Client.produce: new %s" % self.future_state())
         return result
@@ -79,10 +85,11 @@ class Client:
             hex(id(f)), f.cancelled(), f.done(), f._state)
 
     def send(self, message):
-        elog("client.send message[0x10]=%s" % message[:0x10])
-        elog("client.send Before set_result: %s" % self.future_state())
-        self.future.set_result(message)
-        elog("client.send After set_result:  %s" % self.future_state())
+        ra = self.ra()
+        elog("client.send %s message[0x10]=%s" % (ra, message[:0x10]))
+        elog("client.send %s Before set_result: %s" % (ra, self.future_state()))
+        self.future.set_result_default([]).append(message)
+        elog("client.send %s After set_result:  %s" % (ra, self.future_state()))
 
     def json_send(self, message):
         elog("client.json_send message=%s" % str(message))
@@ -94,6 +101,9 @@ class Client:
     def __str__(self):
         address = "%s:%d" % self.ws.remote_address
         return "@%s %s %d" % (address, timestr(self.time), self.phase)
+
+    def ra(self):
+        return "%s:%d" % self.ws.remote_address
 
     def hstr(self):
         address = "%s:%d" % self.ws.remote_address
@@ -107,17 +117,29 @@ class Bumps:
         self.ra_to_client = {}
         
     def peers(self, client):
-        return filter(lambda c: c is not client, self.ra_to_client.values())
+        return list(filter(
+            lambda c: c is not client, self.ra_to_client.values()))
+
+    def publish_client_to_peers(self, client, peers):
+        elog("{ publish_client_to_peers")
+        js_peer_message = json.dumps(
+            {'size': len(self.ra_to_client), client.i: str(client)})
+        elog("js_peer_message=%s" % str(js_peer_message))
+        # map(lambda peer: peer.send(js_peer_message), self.peers(client))
+        for peer in peers:
+            peer.send(js_peer_message);
+        elog("} publish_client_to_peers")
 
     def introduce(self, client):
         elog("introduce")
-        peers = list(self.peers(client))
+        peers = self.peers(client)
         elog("peers: T=%s, V=%s" % (type(peers), str(peers)))
-        message = dict(map(lambda c: (c.i, str(c)), peers))
+        message = dict(map(lambda c: (c.i, c.hstr()), peers))
         message['you'] = client.hstr()
         message['size'] = len(peers)
         elog("introduce: message=%s" % str(message))
         client.json_send(message)
+        self.publish_client_to_peers(client, peers)
 
     def ws_message_handle(self, ws, message):
         ra = ws.remote_address
@@ -127,10 +149,7 @@ class Bumps:
             elog("ws_message_handle: %s" % client.future_state())
             client.bump()
             client.json_send({'you': client.hstr()})
-            js_peer_message = json.dumps(
-                {'size': len(self.ra_to_client), client.i: str(client)})
-            elog("js_peer_message=%s" % str(js_peer_message))
-            map(lambda peer: peer.send(js_peer_message), self.peers(client))
+            self.publish_client_to_peers(client, self.peers(client))
 
     async def ws_handler(self, ws, path):
         elog("ws_handler: path=%s" % str(path))
@@ -160,10 +179,11 @@ class Bumps:
 
             if producer_task in done:
                 elog("producer")
-                message = producer_task.result()
-                elog("message=%s" % str(message))
+                messages = producer_task.result()
+                elog("messages=%s" % str(messages))
                 if ws.open:
-                    await ws.send(message)
+                    for message in messages:
+                        await ws.send(message)
                     producer_task = asyncio.ensure_future(client.produce())
                 else:
                     client.alive = False
