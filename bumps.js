@@ -1,4 +1,4 @@
-var ws = new WebSocket("ws://localhost:4243/");
+var ws = new WebSocket("ws://" + window.location.hostname + ":9677/");
 
 ws.onmessage = function (event) {
     var obj_update = JSON.parse(event.data);

@@ -208,7 +208,7 @@ class Bumps:
 
     def run(self):
         elog("type(ws_handler)=%s" % str(type(self.ws_handler)))
-        start_server = websockets.serve(self.ws_handler, 'localhost', 4243)
+        start_server = websockets.serve(self.ws_handler, '10.0.0.92', 9677)
         asyncio.get_event_loop().run_until_complete(start_server)
         elog("Calling run_forever")
         asyncio.get_event_loop().run_forever()
@@ -218,5 +218,3 @@ if __name__ == '__main__':
     bumps = Bumps()
     bumps.run()
     sys.exit(bumps.rc)
-
-
