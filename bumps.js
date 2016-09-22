@@ -5,24 +5,24 @@ ws.onmessage = function (event) {
     for (k in obj_update) {
         console.log("["+k+"]="+obj_update[k]);
     }
-    var n_peers = obj_update['size']
-    console.log("n_peers=" + n_peers);
-    var peers = document.getElementById("peers");
-    console.log("current ul-peers=" + peers.childElementCount);
-    for (var i = peers.childElementCount; i < n_peers; ++i) {
+    var n_clients = obj_update['size']
+    console.log("n_clients=" + n_clients);
+    var clients = document.getElementById("clients");
+    console.log("current ul-clients=" + clients.childElementCount);
+    for (var i = clients.childElementCount; i < n_clients; ++i) {
         console.log("Addding LI i="+i);
         var node = document.createElement("li");
         node.appendChild(document.createTextNode(""));
-        peers.appendChild(node);
+        clients.appendChild(node);
     }
-    console.log("#(peers)=" + peers.children.length);
+    console.log("#(clients)=" + clients.children.length);
     for (k in obj_update) {
         var v = obj_update[k];
         if (k == "you") {
             document.getElementById("you").innerHTML = v;
         } else if (k != "size") {
 	    console.log("Setting children["+k+"]");
-            peers.children[k].innerHTML = v;
+            clients.children[k].innerHTML = v;
         }
     }
 };

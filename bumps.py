@@ -115,31 +115,30 @@ class Bumps:
     def __init__(self):
         self.rc = 0
         self.ra_to_client = {}
-        
-    def peers(self, client):
-        return list(filter(
-            lambda c: c is not client, self.ra_to_client.values()))
 
-    def publish_client_to_peers(self, client, peers):
-        elog("{ publish_client_to_peers")
+    def clients(self):
+        return self.ra_to_client.values()
+        
+    def client_publish_to_peers(self, client):
+        elog("{ client_publish_to_peers")
+        clients = self.clients()
+        peers = list(filter(lambda c: c is not client, clients))
         js_peer_message = json.dumps(
-            {'size': len(self.ra_to_client), client.i: str(client)})
+            {'size': len(self.ra_to_client), client.i: client.hstr()})
         elog("js_peer_message=%s" % str(js_peer_message))
-        # map(lambda peer: peer.send(js_peer_message), self.peers(client))
         for peer in peers:
             peer.send(js_peer_message);
-        elog("} publish_client_to_peers")
+        elog("} client_publish_to_peers")
 
     def introduce(self, client):
         elog("introduce")
-        peers = self.peers(client)
-        elog("peers: T=%s, V=%s" % (type(peers), str(peers)))
-        message = dict(map(lambda c: (c.i, c.hstr()), peers))
-        message['you'] = client.hstr()
-        message['size'] = len(peers)
+        clients = self.clients()
+        message = dict(map(lambda c: (c.i, c.hstr()), clients))
+        message['you'] = [client.i, client.hstr()]
+        message['size'] = len(clients)
         elog("introduce: message=%s" % str(message))
         client.json_send(message)
-        self.publish_client_to_peers(client, peers)
+        self.client_publish_to_peers(client)
 
     def ws_message_handle(self, ws, message):
         ra = ws.remote_address
@@ -148,8 +147,12 @@ class Bumps:
         if client is not None and message == "bump":
             elog("ws_message_handle: %s" % client.future_state())
             client.bump()
-            client.json_send({'you': client.hstr()})
-            self.publish_client_to_peers(client, self.peers(client))
+            you_status = client.hstr()
+            client.json_send({
+                'you': you_status,
+                'size': len(self.ra_to_client),
+                client.i: you_status})
+            self.client_publish_to_peers(client)
 
     async def ws_handler(self, ws, path):
         elog("ws_handler: path=%s" % str(path))
