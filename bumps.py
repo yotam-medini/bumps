@@ -50,11 +50,11 @@ class Client:
         return "future: @%s cancelled=%s, done=%s, state=%s" % (
             hex(id(f)), f.cancelled(), f.done(), f._state)
 
-    def send(self, message):
+    def pre_send(self, message):
         self.future.set_result_default([]).append(message)
 
-    def json_send(self, message):
-        self.send(json.dumps(message))
+    def json_pre_send(self, message):
+        self.pre_send(json.dumps(message))
 
     def hstr(self):
         address = "%s:%d" % self.ws.remote_address
@@ -76,14 +76,14 @@ class Bumps:
         js_peer_message = json.dumps(
             {'size': len(self.ra_to_client), client.i: client.hstr()})
         for peer in peers:
-            peer.send(js_peer_message);
+            peer.pre_send(js_peer_message);
 
     def introduce(self, client):
         clients = self.clients()
         message = dict(map(lambda c: (c.i, c.hstr()), clients))
         message['you'] = client.hstr()
         message['size'] = len(clients)
-        client.json_send(message)
+        client.json_pre_send(message)
         self.client_publish_to_peers(client)
 
     def ws_message_handle(self, ws, message):
@@ -92,7 +92,7 @@ class Bumps:
         if client is not None and message == "bump":
             client.bump()
             you_status = client.hstr()
-            client.json_send({
+            client.json_pre_send({
                 'you': you_status,
                 'size': len(self.ra_to_client),
                 client.i: you_status})
