@@ -30,13 +30,13 @@ class Client:
     def __init__(self, i, ws):
         self.i = i
         self.ws = ws
-        self.phase = 0;
+        self.counter = 0;
         self.time = time.time()
         self.alive = True
         self.future = GraceFuture()
 
     def bump(self):
-        self.phase += 1
+        self.counter += 1
         self.time = time.time()
 
     async def produce(self):
@@ -59,7 +59,7 @@ class Client:
     def hstr(self):
         address = "%s:%d" % self.ws.remote_address
         return "@%s &emsp; %s &emsp; %d" % (
-            address, timestr(self.time), self.phase)
+            address, timestr(self.time), self.counter)
 
 class Bumps:
 
